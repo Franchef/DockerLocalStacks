@@ -1,31 +1,64 @@
-version: "3"
-
-networks:
-  loki:
-
 services:
-  loki:
-    image: grafana/loki:2.3.0
-    volumes:
-      - /opt/loki/config/loki-config.yml:/etc/loki/loki-config.yml
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/loki-config.yml
-    networks:
-      - loki
+    loki:
+        image: grafana/loki
+        container_name: loki
+        hostname: loki
+        ports:
+            - "3100:3100"
+        command: -config.file=/etc/loki/local-config.yaml
+        volumes:
+            - ./loki-config:/etc/loki/
+        restart: always
+        networks:
+            - world
+            - grafana-loki
+            - promtail-loki
 
-  promtail:
-    image: grafana/promtail:2.3.0
-    volumes:
-      - /opt/loki/config/promtail-config.yml:/etc/promtail/promtail-config.yml
-      - /opt/loki/logs/nginx_access.log:/opt/nginx_access.log
-    command: -config.file=/etc/promtail/promtail-config.yml
-    networks:
-      - loki
+    promtail:
+        depends_on:
+            - loki
+        image: grafana/promtail
+        container_name: promtail
+        hostname: promtail
+        networks:
+            - promtail-loki
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    networks:
-      - loki
+    prometheus:
+        image: prom/prometheus
+        container_name: prometheus
+        hostname: prometheus
+        ports:
+            - "9090:9090"
+        networks:
+            - world
+            - grafana-prometheus
+        
+    grafana:
+        depends_on:
+            - loki
+        image: grafana/grafana-oss
+        container_name: grafana
+        hostname: grafana
+        environment:
+            # increases the log level from info to debug
+            - GF_LOG_LEVEL=debug
+        volumes:
+            - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+            - grafana-data:/var/lib/grafana
+        ports:
+            - "3000:3000"
+        networks:
+            - world
+            - grafana-loki
+            - grafana-prometheus
+volumes:
+  grafana-data:
+  
+networks:
+    world:
+    promtail-loki:
+        internal: true
+    grafana-loki:
+        internal: true
+    grafana-prometheus:
+        internal: true
